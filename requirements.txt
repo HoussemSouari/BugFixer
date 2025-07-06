@@ -1,0 +1,26 @@
+# Core dependencies
+torch==2.3.0
+transformers==4.40.0
+datasets==2.19.0
+accelerate==0.29.3
+
+# Java-specific processing
+tree-sitter==0.22.1
+tree-sitter-java==0.20.1
+
+# Data processing & utils
+numpy==1.26.4
+pandas==2.2.2
+tqdm==4.66.2
+scikit-learn==1.4.2
+
+# Evaluation metrics
+codebleu==0.9.3
+rouge-score==0.1.2
+
+# LaTeX compilation (optional)
+PyLaTeX==1.4.1
+
+# Local inference
+fastapi==0.110.1  # For API endpoint
+uvicorn[standard]==0.29.0  # For running API
