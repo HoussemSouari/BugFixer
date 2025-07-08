@@ -54,3 +54,25 @@ class MultiTaskCodeT5(nn.Module):
         class_loss_fct=CrossEntropyLoss()
         class_loss= class_loss_fct(outputs["logits_class"], class_labels)
         return 0.7 * gen_loss + 0.3 * class_loss
+    
+
+
+    def save_pretrained(self, save_directory):
+        """
+        Save the model and tokenizer to the specified directory.
+        """
+        self.base.save_pretrained(save_directory)
+        self.classifier.save_pretrained(save_directory)
+        print(f"Model saved to {save_directory}")
+
+
+    @classmethod
+    def from_pretrained(cls, model_name_or_path):
+        """
+        Load the model and tokenizer from the specified path.
+        """
+        model = cls(model_name=model_name_or_path)
+        model.base.from_pretrained(model_name_or_path)
+        model.classifier.from_pretrained(model_name_or_path)
+        print(f"Model loaded from {model_name_or_path}")
+        return model

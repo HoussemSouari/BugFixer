@@ -1,6 +1,6 @@
 import re 
 import ast 
-from tree_sitter_languages import Language
+from tree_sitter import Language
 from tree_sitter import Parser
 
 

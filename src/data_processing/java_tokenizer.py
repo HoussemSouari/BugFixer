@@ -58,12 +58,3 @@ class JavaTokenizer:
         print(f"Tokenizer loaded from {load_path}")
 
 
-if __name__ == "__main__":
-    # Example usage
-    tokenizer = JavaTokenizer()
-    
-    # Tokenize a sample code snippet
-    code_snippet = "public class HelloWorld { public static void main(String[] args) { System.out.println(\"Hello, World!\"); } }"
-    tokenized_output = tokenizer.tokenize(code_snippet)
-    print("Tokenized Output:", tokenized_output)
-    
