@@ -47,15 +47,10 @@ class DatasetLoader:
                 return_tensors="pt"
             )
             
-            # Convert error type to label
-            error_types = ["SYNTAX", "LOGICAL", "RUNTIME", "OTHER"]
-            error_labels = [error_types.index(et) for et in examples["error_type"]]
-            
             return {
                 "input_ids": inputs["input_ids"].squeeze().tolist(),
                 "attention_mask": inputs["attention_mask"].squeeze().tolist(),
                 "labels": targets["input_ids"].squeeze().tolist(),
-                "error_label": error_labels
             }
         
         self.logger.info("Tokenizing dataset")
