@@ -1,105 +1,52 @@
 import re 
 import ast 
-from tree_sitter import Language, Parser
+from tree_sitter_languages import Language
+from tree_sitter import Parser
 
 
 class JavaPreprocessor:
+    """
+    Java code preprocessor for cleaning and normalizing code
+    """
+
     def __init__(self):
+        """
+        Initialize the Java preprocessor
+        """
         self.parser = self._initialize_parser()
 
     def _initialize_parser(self):
-
+        """Build and configure tree-sitter parser"""
         try:
-            Language.build_library(
-                'build/my-languages.so',
-                ['vendor/tree-sitter-java']
-            )
-
             JAVA_LANGUAGE = Language('build/my-languages.so', 'java')
             parser = Parser()
-            parser.set_language(JAVA_LANGUAGE)
+            parser.language = JAVA_LANGUAGE
             return parser
         except Exception as e:
             raise RuntimeError(f"Failed to initialize Java parser: {str(e)}")
-        
-    def clean_code(self, code:str) -> str :
 
-        try : 
-            code, str_replacements = self._preserve_string_literals(code)
+    def clean_code(self, code: str) -> str:
+        """
+        Clean Java code by removing comments, extra whitespace, and normalizing syntax
 
-            code = self._remove_comments(code)
+        Args:
+            code: Raw Java code string
 
-            code = self._normalize_generics_annotations(code)
+        Returns:
+            Cleaned Java code string
+        """
+        # Remove comments
+        code = re.sub(r'//.*|/\*.*?\*/', '', code, flags=re.DOTALL)
 
-            code = self._standardize_formatting(code)
-
-            code = self._restore_string_literals(code, str_replacements)
-
-            if not self._is_valid_java(code): 
-                return ValueError ("Invalid Java code after preprocessing")
-            
-            return code
-        except Exception as e :
-            raise RuntimeError(f"Preprocessing failed: {str(e)}")
-
-
-    def _preserve_string_literals(self, code: str) -> tuple[str, dict]:
-        """Replace string literals with placeholders"""
-        replacements = {}
-        str_count = 0
-        
-        def replace_str(match):
-            nonlocal str_count
-            content = match.group(0)
-            placeholder = f"__STR_{str_count}__"
-            replacements[placeholder] = content
-            str_count += 1
-            return placeholder
-        
-        # Replace string literals
-        code = re.sub(r'"(?:\\.|[^\\"])*"', replace_str, code)
-        # Replace character literals
-        code = re.sub(r"'(?:\\.|[^\\'])*'", replace_str, code)
-        
-        return code, replacements
-    
-    def _remove_comments(self, code: str) -> str:
-        """Remove all comments from code"""
-        # Remove single-line comments
-        code = re.sub(r'//.*', '', code)
-        # Remove multi-line comments
-        code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
-        return code
-    
-    def _normalize_generics_annotations(self, code: str) -> str:
-        """Normalize Java-specific constructs"""
-        # Handle generics
-        code = re.sub(r'<', ' < ', code)
-        code = re.sub(r'>', ' > ', code)
-        # Handle annotations
-        code = re.sub(r'@(\w+)', r'@ \1', code)
-        return code
-    
-    def _standardize_formatting(self, code: str) -> str:
-        """Standardize code formatting"""
         # Normalize whitespace
-        code = re.sub(r'\s+', ' ', code)
-        # Format control structures
-        keywords = ['if', 'for', 'while', 'try', 'catch', 'switch']
-        for kw in keywords:
-            code = re.sub(rf'\b{kw}\s*\(', f'{kw} (', code)
-        return code.strip()
-    
-    def _restore_string_literals(self, code: str, replacements: dict) -> str:
-        """Restore original string literals"""
-        for placeholder, original in replacements.items():
-            code = code.replace(placeholder, original)
-        return code
-    
-    def _is_valid_java(self, code: str) -> bool:
-        """Validate Java code structure using tree-sitter"""
-        try:
-            tree = self.parser.parse(bytes(code, "utf8"))
-            return not tree.root_node.has_error
-        except:
-            return False
+        code = re.sub(r'\s+', ' ', code).strip()
+
+        # Parse and reformat using tree-sitter
+        tree = self.parser.parse(bytes(code, "utf8"))
+        return self._walk_tree(tree.root_node)
+
+    def _walk_tree(self, node):
+        """Recursively walk the AST to extract cleaned code"""
+        if node.is_named:
+            return node.text.decode('utf-8')
+        return ''
