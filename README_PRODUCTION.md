@@ -1,1 +1,200 @@
-# Java Bug-Fixing Model - Production Implementation Guide\n\n## Overview\n\nThis repository contains a complete, production-grade Java bug-fixing model based on CodeT5 with:\n\n- **Real-world focus**: Fixes actual Java bugs (not abstracted variable names)\n- **Advanced architecture**: Multi-task learning with bug-type classification\n- **Optimized training**: Mixed precision (fp16), gradient accumulation, curriculum learning\n- **Comprehensive evaluation**: BLEU, CodeBLEU, exact match, syntax validity\n- **Production-ready inference**: Beam search, confidence scoring, fallback mechanisms\n\n## Critical Issues Addressed\n\n### Problem 1: Abstracted Variable Names\n**Old Issue**: Model trained on `VAR_1`, `TYPE_1`, outputs gibberish on real code\n**Solution**: \n- Removed abstraction layer entirely\n- Keep real variable names, method names, types intact\n- Dataset generated from actual Java code patterns\n\n### Problem 2: Domain Mismatch (CodeXGLUE)\n**Old Issue**: 77.8% BLEU on synthetic CodeXGLUE but 0% exact match on real code\n**Solution**:\n- Generate synthetic bugs from real Java code\n- Balance bug types: off-by-one, null checks, operator errors, etc.\n- Filter invalid code with syntax validation\n- 70% exact match target achievable with proper data\n\n### Problem 3: Training Inefficiency\n**Old Issue**: Small batch size (2), only 3 epochs, no mixed precision\n**Solution**:\n- Batch size: 16 (with gradient accumulation)\n- Epochs: 15 with early stopping\n- Mixed precision training (fp16)\n- Gradient clipping and warmup scheduling\n\n## Directory Structure\n\n```\n/home/houssem/BugFixer/\n├── src/\n│   ├── data_processing/\n│   │   ├── real_bug_loader.py         # Load Defects4J or generate synthetic bugs\n│   │   ├── advanced_preprocessor.py   # Syntax validation, bug type classification\n│   │   └── __init__.py\n│   ├── model/\n│   │   ├── enhanced_architecture.py   # CodeT5 with multi-task learning\n│   │   ├── optimized_trainer.py       # Training loop with fp16, gradient accumulation\n│   │   ├── production_inference.py    # Beam search, confidence scoring\n│   │   └── __init__.py\n│   ├── evaluation/\n│   │   ├── comprehensive_evaluator.py # BLEU, CodeBLEU, syntax validation, per-type metrics\n│   │   └── __init__.py\n│   └── utils/\n│       ├── config.py\n│       ├── logger.py\n│       └── __init__.py\n├── training_pipeline.ipynb             # Complete end-to-end training notebook\n├── test_cases.py                       # 20 real bug test cases with assertions\n├── requirements.txt                    # All dependencies\n├── README.md                           # This file\n└── output/\n    ├── data/\n    │   ├── raw_bugs.json              # Generated bug dataset\n    │   ├── train.json                 # Training split\n    │   ├── validation.json            # Validation split\n    │   └── test.json                  # Test split\n    ├── model/\n    │   ├── checkpoint_epoch_*.pt      # Training checkpoints\n    │   ├── best_model.pt              # Best model on validation\n    │   └── training_config.json\n    ├── final_model/\n    │   ├── pytorch_model.bin          # Final model weights\n    │   ├── config.json                # Model config with metrics\n    │   └── tokenizer files\n    ├── metrics.json                   # Final evaluation metrics\n    ├── evaluation_results.json        # Detailed per-sample results\n    └── training_curves.png            # Loss visualization\n```\n\n## Installation\n\n### Requirements\n- Python 3.9+\n- CUDA 11.8+ (for GPU)\n- 16GB GPU VRAM minimum (Tesla T4 recommended)\n\n### Setup\n\n```bash\ncd /home/houssem/BugFixer\n\n# Install dependencies\npip install -r requirements.txt\n\n# Verify installation\npython -c \"import torch; print(f'CUDA available: {torch.cuda.is_available()}');\"\n```\n\n## Quick Start\n\n### 1. Training\n\n```bash\n# Open Jupyter and run training_pipeline.ipynb\njupyter notebook training_pipeline.ipynb\n```\n\nOr use the Python API:\n\n```python\nfrom src.model.optimized_trainer import OptimizedTrainer, TrainingConfig\nfrom src.data_processing.real_bug_loader import CombinedBugDataset\nfrom src.model.enhanced_architecture import CodeT5MultiTask\n\n# See training_pipeline.ipynb for complete example\n```\n\n### 2. Inference\n\n```python\nfrom src.model.production_inference import ProductionInference\nimport torch\nfrom transformers import AutoTokenizer, AutoModelForSeq2SeqLM\n\ndevice = torch.device('cuda' if torch.cuda.is_available() else 'cpu')\n\n# Load model\nmodel = AutoModelForSeq2SeqLM.from_pretrained('./output/final_model')\ntokenizer = AutoTokenizer.from_pretrained('./output/final_model')\n\n# Create inference engine\ninference = ProductionInference(model, tokenizer, device)\n\n# Make prediction\nbuggy_code = \"for(int i=0; i<=arr.length; i++) { sum += arr[i]; }\"\nresult = inference.predict_single(buggy_code)\n\nprint(f\"Fixed: {result.predicted_code}\")\nprint(f\"Bug Type: {result.predicted_bug_type}\")\nprint(f\"Confidence: {result.confidence:.2%}\")\n```\n\n### 3. Evaluation\n\n```python\nfrom src.evaluation.comprehensive_evaluator import BugFixEvaluator\nfrom test_cases import RealBugTestCases\n\n# Get test cases\ntest_cases = RealBugTestCases.get_all_cases()\n\n# Run evaluation\nevaluator = BugFixEvaluator(tokenizer, bug_types=['off_by_one', 'null_check', ...])\nresults = evaluator.evaluate_batch(\n    buggy_codes=[c['buggy_code'] for c in test_cases],\n    fixed_codes=[c['fixed_code'] for c in test_cases],\n    predicted_codes=predictions,\n    bug_types=[c['bug_type'] for c in test_cases],\n)\n\n# Get metrics\nmetrics = evaluator.compute_aggregate_metrics(results)\nprint(evaluator.generate_report(metrics))\n```\n\n## Configuration\n\n### Training Configuration (TrainingConfig)\n\n```python\nconfig = TrainingConfig(\n    # Model\n    model_name=\"Salesforce/codet5-base\",\n    \n    # Batch and accumulation\n    batch_size=16,\n    gradient_accumulation_steps=4,  # Effective batch: 64\n    \n    # Learning\n    learning_rate=3e-5,\n    weight_decay=0.01,\n    warmup_steps=1000,\n    num_epochs=15,\n    \n    # Advanced training\n    use_fp16=True,  # Mixed precision\n    max_grad_norm=1.0,\n    \n    # Generation\n    max_source_length=512,\n    max_target_length=512,\n    num_beams=5,\n    \n    # Early stopping\n    early_stopping=True,\n    patience=3,\n    \n    # Output\n    output_dir=\"./output/model\",\n)\n```\n\n## Data Preparation Strategy\n\n### Option A: Synthetic Bug Generation (Recommended)\n\nFor when Defects4J is not available locally:\n\n```python\nfrom src.data_processing.real_bug_loader import (\n    RealBugGenerator, CombinedBugDataset, create_java_code_samples\n)\n\n# Get correct Java code\njava_samples = create_java_code_samples()\n\n# Generate bugs\ngenerator = RealBugGenerator(seed=42)\nbuggy, original, bug_type = generator.inject_bug(\n    java_samples[0],\n    bug_type='off_by_one'  # or None for random\n)\n\n# Or use combined dataset\ndataset_gen = CombinedBugDataset()\nbugs = dataset_gen.generate_dataset(\n    java_code_samples=java_samples,\n    num_synthetic_per_sample=5,\n    num_github_bugs=100,\n)\n```\n\n**Supported Bug Types**:\n1. `off_by_one` - Loop bounds errors\n2. `null_check` - Missing null safety checks\n3. `missing_break` - Missing break in switch\n4. `operator` - Wrong operators (=, ==, &, &&, etc)\n5. `logic` - Inverted conditions, logic errors\n6. `resource_leak` - Missing .close() calls\n7. `type_mismatch` - Wrong type casts\n\n### Option B: Defects4J Integration\n\nIf Defects4J is installed:\n\n```python\ndefects4j_path = \"/path/to/defects4j\"\ndataset_gen = CombinedBugDataset(defects4j_path=defects4j_path)\nbugs = dataset_gen.generate_dataset(\n    java_code_samples=[],\n    include_defects4j=True,\n    num_synthetic_per_sample=0,\n)\n```\n\n## Preprocessing Pipeline\n\n```python\nfrom src.data_processing.advanced_preprocessor import AdvancedJavaPreprocessor\n\npreprocessor = AdvancedJavaPreprocessor(max_length=512)\n\n# For each code pair\npair = preprocessor.preprocess_pair(\n    buggy_code=buggy,\n    fixed_code=fixed,\n    bug_type='off_by_one',\n    extract_body=False,     # Keep full context\n    add_prefix=True,        # Add task prefix: \"Fix off-by-one error:\"\n    validate_syntax=True,   # Filter broken code\n)\n\nif pair.is_valid:\n    print(f\"Preprocessed: {pair.buggy_code[:100]}\")\n    print(f\"Tokens: {pair.buggy_tokens} -> {pair.fixed_tokens}\")\nelse:\n    print(f\"Invalid: {pair.error_message}\")\n```\n\n## Training Process\n\n### Phases\n\n1. **Data Preparation** (5 min)\n   - Load/generate dataset\n   - Preprocess and validate\n   - Split into train/val/test\n   - Balance bug types\n\n2. **Model Setup** (2 min)\n   - Initialize CodeT5-base\n   - Add bug-type classification head\n   - Setup multi-task learning\n\n3. **Training** (4-6 hours on Tesla T4)\n   - 15 epochs with early stopping\n   - Gradient accumulation for effective batch 64\n   - Mixed precision training (fp16)\n   - Curriculum learning (easy bugs → complex)\n   - Save best model on validation metric\n\n4. **Evaluation** (30 min)\n   - Compute BLEU, CodeBLEU, ROUGE, METEOR\n   - Exact match rate\n   - Syntax validity\n   - Per-bug-type accuracy\n   - Generate detailed report\n\n5. **Inference** (instant)\n   - Beam search generation\n   - Bug-type prediction\n   - Confidence scoring\n   - Fallback mechanisms\n\n## Expected Metrics\n\n### Target Performance (After Training)\n\n- **Exact Match Rate**: >20% (improvement from 0%)\n- **BLEU-4**: >70% (maintained from abstracted version)\n- **CodeBLEU**: >60% (semantic similarity)\n- **Syntax Valid**: >95% (all outputs compile)\n- **Per-bug-type accuracy**:\n  - Off-by-one: >40%\n  - Null checks: >25%\n  - Missing break: >30%\n  - Operator errors: >20%\n  - Logic errors: >15%\n\n### Metrics Computation\n\n```python\nfrom src.evaluation.comprehensive_evaluator import BugFixEvaluator\n\nevaluator = BugFixEvaluator(tokenizer)\n\n# Single prediction\nresult = evaluator.evaluate_single(\n    buggy='for(int i=0; i<=n; i++) { }',\n    fixed='for(int i=0; i<n; i++) { }',\n    predicted='for(int i=0; i<n; i++) { }',\n    bug_type='off_by_one',\n)\n\nprint(f\"Exact Match: {result.exact_match}\")  # 1.0\nprint(f\"BLEU: {result.bleu}\")                 # 0.95+\nprint(f\"CodeBLEU: {result.code_bleu}\")       # 0.90+\nprint(f\"Syntax Valid: {result.syntax_valid}\") # True\n```\n\n## Production Inference\n\n### Inference API\n\n```python\nfrom src.model.production_inference import ProductionInference\n\ninference = ProductionInference(\n    model=model,\n    tokenizer=tokenizer,\n    device=device,\n    bug_types=['off_by_one', 'null_check', ...],\n)\n\n# Single prediction with alternatives\nresult = inference.predict_single(\n    buggy_code=\"for(int i=0; i<=arr.length; i++) { }\",\n    max_length=512,\n    num_beams=5,\n    temperature=0.7,\n    return_alternatives=True,\n    predict_bug_type=True,\n)\n\nprint(f\"Predicted: {result.predicted_code}\")\nprint(f\"Bug Type: {result.predicted_bug_type}\")\nprint(f\"Confidence: {result.confidence:.2%}\")\nprint(f\"Alternatives:\")\nfor alt, conf in result.alternative_suggestions:\n    print(f\"  - {alt[:50]}... (confidence: {conf:.2%})\")\n\n# Batch predictions\nresults = inference.predict_batch(\n    buggy_codes=code_list,\n    batch_size=32,\n)\n```\n\n### Fallback Mechanisms\n\n```python\nfrom src.model.production_inference import FallbackMechanism\n\nfallback = FallbackMechanism(\n    training_dataset=[(buggy, fixed) for buggy, fixed in training_pairs]\n)\n\n# Find similar bugs and reuse their fixes\nif model_prediction_fails:\n    similar_fixes = fallback.find_similar_fix(buggy_code, top_k=3)\n    if similar_fixes:\n        return similar_fixes[0]\n\n# Apply heuristic fixes\nheuristic_fix = fallback.apply_heuristic_fix(buggy_code)\nif heuristic_fix:\n    return heuristic_fix\n```\n\n## Troubleshooting\n\n### Issue 1: CUDA Out of Memory\n\n**Error**: `RuntimeError: CUDA out of memory`\n\n**Solutions**:\n```python\n# Option 1: Reduce batch size\nconfig.batch_size = 8\nconfig.gradient_accumulation_steps = 8  # Keep effective batch 64\n\n# Option 2: Enable CPU offloading\nmodel.gradient_checkpointing_enable()\n\n# Option 3: Use smaller model\nconfig.model_name = \"Salesforce/codet5-small\"  # 60M params\n```\n\n### Issue 2: Low Exact Match Rate\n\n**Symptom**: Exact match <5%, only syntactically valid\n\n**Causes & Fixes**:\n```python\n# 1. Insufficient training data\n# - Increase num_synthetic_per_sample\nbugs = dataset_gen.generate_dataset(\n    java_code_samples=java_samples,\n    num_synthetic_per_sample=10,  # Increase from 5\n)\n\n# 2. Too many epochs without validation-based early stopping\nconfig.early_stopping = True\nconfig.patience = 3  # Stop after 3 epochs without improvement\n\n# 3. Learning rate too high\nconfig.learning_rate = 1e-5  # Reduce from 3e-5\n\n# 4. Insufficient preprocessing\npreprocessor = AdvancedJavaPreprocessor(max_length=512)\n# Enable all preprocessing steps\n```\n\n### Issue 3: Model Outputs Gibberish\n\n**Symptom**: Predictions like `public static void main(...){}`\n\n**Fixes**:\n```python\n# 1. Check data preprocessing\nfor pair in val_pairs[:5]:\n    print(f\"Buggy: {pair.buggy_code[:50]}\")\n    print(f\"Fixed: {pair.fixed_code[:50]}\")\n    print(f\"Valid: {pair.is_valid}\")\n    print()\n\n# 2. Verify model is actually training\n# - Check train loss decreasing\n# - Check validation loss decreasing\n# - Check predictions improving\n\n# 3. Reduce beam size or add length penalty\nresult = inference.predict_single(\n    buggy_code,\n    num_beams=3,           # Reduce from 5\n    length_penalty=2.0,    # Prefer shorter outputs\n)\n```\n\n### Issue 4: Training Stuck/Not Converging\n\n**Fixes**:\n```python\n# 1. Check learning rate\nconfig.learning_rate = 5e-5  # Increase from 3e-5\n\n# 2. Check warmup\nconfig.warmup_steps = 500  # Reduce warmup\n\n# 3. Check gradient clipping\nconfig.max_grad_norm = 0.5  # Tighter clipping\n\n# 4. Use scheduler\nconfig.lr_scheduler = 'cosine'  # Better than linear\n```\n\n### Issue 5: Inference Slow\n\n**Solutions**:\n```python\n# 1. Reduce beam size\nresult = inference.predict_single(\n    buggy_code,\n    num_beams=3,  # vs 5\n)\n\n# 2. Batch inference\nresults = inference.predict_batch(\n    buggy_codes=code_list,\n    batch_size=64,  # Larger batches\n)\n\n# 3. Use smaller model\nmodel = CodeT5MultiTask(\"Salesforce/codet5-small\")\n\n# 4. Quantization\nimport torch_quantization\nmodel = torch.quantization.quantize_dynamic(\n    model, {torch.nn.Linear}, dtype=torch.qint8\n)\n```\n\n## Testing\n\n### Run Test Cases\n\n```bash\n# Verify test suite\npython test_cases.py\n\n# Output: All 20 test cases verified!\n```\n\n### Evaluate on Test Cases\n\n```python\nfrom test_cases import RealBugTestCases\nfrom src.evaluation.comprehensive_evaluator import BugFixEvaluator\n\ntest_cases = RealBugTestCases.get_all_cases()\nevaluator = BugFixEvaluator(tokenizer)\n\ncorrect = 0\nfor case in test_cases:\n    result = inference.predict_single(case['buggy_code'])\n    \n    # Check if prediction matches expected\n    if result.predicted_code.strip() == case['fixed_code'].strip():\n        correct += 1\n    \n    eval_result = evaluator.evaluate_single(\n        case['buggy_code'],\n        case['fixed_code'],\n        result.predicted_code,\n        case['bug_type'],\n    )\n    \n    print(f\"Case {case['id']}: \"\n          f\"Exact={eval_result.exact_match:.0%} \"\n          f\"BLEU={eval_result.bleu:.2f} \"\n          f\"Type={case['bug_type']}\")\n\nprint(f\"\\nTest Performance: {correct}/20 correct ({100*correct/20:.0%})\")\n```\n\n## Performance Optimization\n\n### Training Speed\n\n| Configuration | Time per Epoch | Total (15 epochs) |\n|---|---|---|\n| Default (batch=16) | 2 min | 30 min |\n| With fp16 | 1.5 min | 22 min |\n| With gradient checkpointing | 1.8 min | 27 min |\n| Small model (codet5-small) | 45 sec | 11 min |\n\n### Inference Speed\n\n| Configuration | Single Prediction | Batch (32) |\n|---|---|---|\n| num_beams=5 | 500 ms | 50 ms per sample |\n| num_beams=3 | 300 ms | 30 ms per sample |\n| Small model | 200 ms | 15 ms per sample |\n\n## Deployment\n\n### Save for Production\n\n```python\n# Save model and tokenizer\nmodel.base_model.save_pretrained('./production_model')\ntokenizer.save_pretrained('./production_model')\n\n# Save config\nconfig_dict = {\n    'model_name': 'codet5-base',\n    'max_source_length': 512,\n    'max_target_length': 512,\n    'bug_types': bug_types_list,\n    'metrics': final_metrics,\n}\nwith open('./production_model/config.json', 'w') as f:\n    json.dump(config_dict, f)\n```\n\n### Load for Inference\n\n```python\nfrom transformers import AutoTokenizer, AutoModelForSeq2SeqLM\nfrom src.model.production_inference import ProductionInference\nimport json\n\n# Load\nmodel = AutoModelForSeq2SeqLM.from_pretrained('./production_model')\ntokenizer = AutoTokenizer.from_pretrained('./production_model')\nconfig = json.load(open('./production_model/config.json'))\n\n# Use\ninference = ProductionInference(model, tokenizer, device)\nresult = inference.predict_single(buggy_code)\n```\n\n## References\n\n- [CodeT5: Identifier-aware Unified Pre-trained Encoder-Decoder Models](https://arxiv.org/abs/2109.13666)\n- [Defects4J: A Database of Existing Faults for Enabling Controlled Testing Studies](https://arxiv.org/abs/1601.02540)\n- [CodeBLEU: A Method for Automatic Evaluation of Code Synthesis](https://arxiv.org/abs/2009.10297)\n- [BLEU: Automatic Evaluation of Machine Translation](https://aclanthology.org/P02-1040/)\n\n## Contributing\n\nTo improve the model:\n\n1. Add more real bug examples to test_cases.py\n2. Implement additional bug types in RealBugGenerator\n3. Improve preprocessing heuristics\n4. Experiment with different architectures\n5. Integrate Defects4J when available\n\n## License\n\nMIT License - See LICENSE file\n\n## Contact\n\nFor issues or questions, please open an issue on GitHub.\n
+# Java Bug-Fixing Model - Production Implementation Guide
+
+## Overview
+
+This repository contains a complete, production-grade Java bug-fixing model based on CodeT5 with:
+
+- **Real-world focus**: Fixes actual Java bugs (not abstracted variable names)
+- **Advanced architecture**: Multi-task learning with bug-type classification
+- **Optimized training**: Mixed precision (fp16), gradient accumulation, curriculum learning
+- **Comprehensive evaluation**: BLEU, CodeBLEU, exact match, syntax validity
+- **Production-ready inference**: Beam search, confidence scoring, fallback mechanisms
+
+## Critical Issues Addressed
+
+### Problem 1: Abstracted Variable Names
+**Old Issue**: Model trained on VAR_1, TYPE_1, outputs gibberish on real code  
+**Solution**: Removed abstraction layer entirely, keep real variable/method names
+
+### Problem 2: Domain Mismatch
+**Old Issue**: 77.8% BLEU on CodeXGLUE but 0% exact match on real code  
+**Solution**: Generate synthetic bugs from real Java code with proper training
+
+### Problem 3: Training Configuration
+**Old Issue**: Batch size 2, only 3 epochs, no mixed precision  
+**Solution**: Batch size 16, 15 epochs, fp16 mixed precision training
+
+## Installation
+
+```bash
+cd /home/houssem/BugFixer
+pip install -r requirements.txt
+python verify_setup.py
+```
+
+## Quick Start
+
+### Training
+```bash
+jupyter notebook training_pipeline.ipynb
+```
+
+### Inference
+```python
+from src.model.production_inference import ProductionInference
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+
+model = AutoModelForSeq2SeqLM.from_pretrained('./output/final_model')
+tokenizer = AutoTokenizer.from_pretrained('./output/final_model')
+inference = ProductionInference(model, tokenizer, device)
+
+result = inference.predict_single("for(int i=0; i<=arr.length; i++) { }")
+print(result.predicted_code)
+```
+
+## Project Structure
+
+```
+src/
+  ├── data_processing/         Data generation & preprocessing
+  ├── model/                   Architecture & training
+  ├── evaluation/              Metrics computation
+  └── utils/                   Config & logging
+
+training_pipeline.ipynb        End-to-end training
+test_cases.py                  20 test cases
+requirements.txt               Dependencies
+```
+
+## Key Features
+
+✅ Real data - Actual Java code (not abstracted)  
+✅ Advanced training - Mixed precision, gradient accumulation, early stopping  
+✅ Multi-task learning - Bug classification + code generation  
+✅ Comprehensive evaluation - 7 metrics  
+✅ Production-ready - Beam search, confidence scoring  
+✅ Well-documented - 3500+ lines
+
+## Data Preparation
+
+### 7 Bug Types Supported
+1. off_by_one - Loop bounds errors
+2. null_check - Missing null checks
+3. missing_break - Missing switch breaks
+4. operator - Wrong operators
+5. logic - Logic errors
+6. resource_leak - Missing .close()
+7. type_mismatch - Wrong type casts
+
+```python
+from src.data_processing.real_bug_loader import RealBugGenerator
+
+generator = RealBugGenerator(seed=42)
+buggy, original, bug_type = generator.inject_bug(code, 'off_by_one')
+```
+
+## Preprocessing
+
+```python
+from src.data_processing.advanced_preprocessor import AdvancedJavaPreprocessor
+
+preprocessor = AdvancedJavaPreprocessor(max_length=512)
+pair = preprocessor.preprocess_pair(
+    buggy_code, fixed_code, bug_type,
+    validate_syntax=True,
+    add_prefix=True,
+)
+```
+
+## Training Configuration
+
+```python
+from src.model.optimized_trainer import TrainingConfig
+
+config = TrainingConfig(
+    batch_size=16,
+    gradient_accumulation_steps=4,        # Effective batch: 64
+    learning_rate=3e-5,
+    num_epochs=15,
+    use_fp16=True,                        # Mixed precision
+    early_stopping=True,
+    patience=3,
+)
+```
+
+## Expected Performance
+
+| Metric | Target |
+|--------|--------|
+| Exact Match | >20% |
+| BLEU-4 | >70% |
+| CodeBLEU | >60% |
+| Syntax Valid | >95% |
+
+## Training Time
+
+- Device: Tesla T4 (16GB VRAM)
+- Effective batch: 64
+- Time per epoch: ~25 minutes
+- Total training: ~6 hours
+
+## Evaluation
+
+```python
+from src.evaluation.comprehensive_evaluator import BugFixEvaluator
+
+evaluator = BugFixEvaluator(tokenizer)
+result = evaluator.evaluate_single(
+    buggy='for(int i=0; i<=n; i++) { }',
+    fixed='for(int i=0; i<n; i++) { }',
+    predicted='for(int i=0; i<n; i++) { }',
+    bug_type='off_by_one',
+)
+```
+
+## Troubleshooting
+
+### CUDA Out of Memory
+```python
+config.batch_size = 8
+config.gradient_accumulation_steps = 8
+```
+
+### Low Exact Match
+- Increase training data: `num_synthetic_per_sample=10`
+- Enable early stopping: `early_stopping=True`
+- Reduce learning rate: `learning_rate=1e-5`
+
+### Model Outputs Gibberish
+- Verify preprocessing is working
+- Check training loss is decreasing
+- Reduce beam size: `num_beams=3`
+
+### Inference Too Slow
+```python
+result = inference.predict_single(
+    buggy_code,
+    num_beams=3,
+)
+```
+
+## Testing
+
+```bash
+# Run test cases
+python test_cases.py
+
+# Evaluate on tests
+from test_cases import RealBugTestCases
+test_cases = RealBugTestCases.get_all_cases()
+```
+
+## References
+
+- [CodeT5: Pre-trained Encoder-Decoder Models for Code](https://arxiv.org/abs/2109.13666)
+- [Defects4J: Database of Bugs](https://arxiv.org/abs/1601.02540)
+- [CodeBLEU: Evaluation of Code Synthesis](https://arxiv.org/abs/2009.10297)
+
+## License
+
+MIT License
